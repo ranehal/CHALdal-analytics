@@ -4,8 +4,8 @@
 
 Track price changes, spot deals, and never overpay again on Bangladesh's largest online grocery platform.
 
-[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-0099ff?style=flat-square)](https://your-username.github.io/chaldal-tracker)
-[![Daily Scrape](https://img.shields.io/github/actions/workflow/status/your-username/chaldal-tracker/scrape.yml?label=Daily%20Scrape&style=flat-square)](https://github.com/your-username/chaldal-tracker/actions)
+[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-0099ff?style=flat-square)](https://ranehal.github.io/CHALdal-analytics/)
+[![Daily Scrape](https://img.shields.io/github/actions/workflow/status/ranehal/CHALdal-analytics/scrape.yml?label=Daily%20Scrape&style=flat-square)](https://github.com/ranehal/CHALdal-analytics/actions)
 
 ---
 
@@ -94,10 +94,10 @@ data/
 
 ## GitHub Pages Setup
 
-1. Push to GitHub
-2. Go to **Settings → Pages → Source: main branch / root**
-3. The site will be live at `https://<username>.github.io/<repo>/`
-4. The **GitHub Action** (`.github/workflows/scrape.yml`) runs daily at midnight BST, scrapes fresh prices and commits the updated `data/` files automatically.
+1. In GitHub Repository: **Settings → Pages**
+2. Under **Build and deployment → Source**, select **GitHub Actions** (or **Deploy from a branch: main / root**).
+3. The site will automatically deploy and be live at: [https://ranehal.github.io/CHALdal-analytics/](https://ranehal.github.io/CHALdal-analytics/)
+4. The **GitHub Action** (`.github/workflows/scrape.yml`) runs daily at midnight BST to scrape fresh prices, commit updated data, and trigger auto-deployment.
 
 ---
 
