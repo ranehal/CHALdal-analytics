@@ -1,129 +1,127 @@
-# ChaldalTracker 🛒
+# 🛒 ChaldalTracker — Grocery Price Analytics Platform
 
-**Bangladesh's first grocery price history tracker** — like CamelCamelCamel for Chaldal.
+> **Bangladesh's Premier Online Grocery Price Tracker & Market Forensics Engine for Chaldal.**
 
-Track price changes, spot deals, and never overpay again on Bangladesh's largest online grocery platform.
-
-[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-0099ff?style=flat-square)](https://ranehal.github.io/CHALdal-analytics/)
-[![Daily Scrape](https://img.shields.io/github/actions/workflow/status/ranehal/CHALdal-analytics/scrape.yml?label=Daily%20Scrape&style=flat-square)](https://github.com/ranehal/CHALdal-analytics/actions)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-0099ff?style=for-the-badge&logo=github)](https://ranehal.github.io/CHALdal-analytics/)
+[![Daily Scrape Pipeline](https://img.shields.io/github/actions/workflow/status/ranehal/CHALdal-analytics/scrape.yml?label=Daily%20Scrape&style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/ranehal/CHALdal-analytics/actions)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B%20(stdlib)-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
 ---
 
-## Features
+## 📌 Executive Summary
 
-| Feature | Details |
-|---|---|
-| **Price History** | Interactive Chart.js graphs per product (7D / 30D / All) |
-| **Price Analytics** | Distribution charts, trend lines, category breakdowns |
-| **Flash Deals** | Discounted products sorted by biggest savings |
-| **Watchlist** | Star products, persisted in localStorage |
-| **Search** | Instant autocomplete across 3000+ products |
-| **Categories** | Full tree navigation with 233 categories/subcategories |
-| **Responsive** | Works on mobile, tablet, desktop |
-| **Dark/Light mode** | Toggle with memory |
-| **Auto-refresh** | GitHub Actions scrapes daily at midnight BST |
+**ChaldalTracker** is a high-performance price tracking, discount analytics, and market monitoring platform tailored for [Chaldal](https://chaldal.com), Bangladesh's largest online grocery service.
 
-## Quick Start
+Operating similarly to CamelCamelCamel for Amazon, ChaldalTracker captures daily snapshots of over 3,000+ products across 233 categories, tracks price volatility, detects flash sale deals, and displays real-time price trend charts through a responsive web application hosted on GitHub Pages.
 
-### 1. Interactive Menu (recommended)
-Simply run [`runall.bat`](file:///C:/PROJECTS/CHALDAL/runall.bat) without arguments:
-```cmd
-runall.bat
-```
-You will be presented with an interactive prompt:
-- **`[1] scraper`** — Run scraper only to refresh product & price history JSON files.
-- **`[2] dashbrd`** — Launch dashboard web server (`http://localhost:8000`) only.
-- **`[3] both`**    — Run scraper first, then launch dashboard.
+---
 
-### 2. Direct Command-Line Arguments
-```cmd
-runall.bat scraper  # Scrape data only
-runall.bat dashbrd  # Launch web dashboard only
-runall.bat both     # Scrape and launch web dashboard
-```
+## 🚀 Key Features
 
-### 3. Manual scraper options
-```bash
-# Full scrape
-python scraper.py
+- **📊 Interactive Price History (Chart.js)**: Visualize product price changes over 7-day, 30-day, and all-time windows with historical minimum/maximum price indicators.
+- **⚡ Reverse-Engineered Android API Engine**: Leverages mobile endpoints discovered via Reqable HAR traffic inspection of `com.chaldal.poached` (v10.5.3).
+- **🏷️ Flash Sale & Deal Intelligence Engine**: Identifies daily deals and discounts, sorting items by absolute savings (৳) and discount percentage.
+- **🌳 233-Category Tree Navigation**: Full multi-tier category navigation supporting instant fuzzy autocomplete search.
+- **🔄 Automated GitHub Actions Pipeline**: Runs daily at midnight BST (`00:00 BST`) to ingest current market prices, commit delta JSON data, and update GitHub Pages.
 
-# Single category (for testing)
-python scraper.py --cat 108
+---
 
-# Custom store/warehouse/area
-python scraper.py --store 1 --warehouse 8 --area 4
+## 🏗️ System Architecture
 
-# Custom output directory
-python scraper.py --output data
+```mermaid
+flowchart TD
+    subgraph Data_Ingestion ["⚡ Scraper Core (scraper.py)"]
+        Reqable[Reqable HAR Inspection] --> Endpoints[Discovered Chaldal REST APIs]
+        Endpoints --> FetchInit[GET FetchInitDataForCombinedStore]
+        Endpoints --> SearchCatalog[POST catalog.chaldal.com/searchPersonalized]
+        Endpoints --> DailyDeals[GET DailyDeal/RetrieveDailyDeals]
+    end
+
+    subgraph Data_Persistence ["💾 Data Storage (data/*.json)"]
+        FetchInit --> Categories[categories.json & init_meta.json]
+        SearchCatalog --> Products[products.json & price_history.json]
+        DailyDeals --> Deals[daily_deals.json & banners.json]
+    end
+
+    subgraph Presentation_Layer ["📊 Presentation Engine"]
+        Products --> SPA[Vanilla JS SPA: app.js]
+        Categories --> SPA
+        SPA --> Views[Product Grid / Price History Modals / Watchlist]
+        SPA --> GitHubPages[GitHub Pages Deployment]
+    end
 ```
 
 ---
 
-## API Endpoints Discovered
+## 🔑 Reverse-Engineered API Specification
 
-From the Reqable HAR capture of `com.chaldal.poached` (v10.5.3):
+Ingestion connects directly to Chaldal's production API endpoints:
 
-| Endpoint | Purpose |
-|---|---|
-| `GET eggyolk.chaldal.com/api-v4/Device/FetchInitDataForCombinedStore` | Categories, banners, home groups, areas, constants |
-| `POST catalog.chaldal.com/searchPersonalized` | Product listings by category/search |
-| `GET eggyolk.chaldal.com/api-v4/DailyDeal/RetrieveDailyDeals` | Daily flash deals |
+| Endpoint | HTTP Method | Description & Parameters |
+| :--- | :--- | :--- |
+| `eggyolk.chaldal.com/api-v4/Device/FetchInitDataForCombinedStore` | `GET` | Catalog categories, metropolitan areas, store constants |
+| `catalog.chaldal.com/searchPersonalized` | `POST` | Category product listings & price details |
+| `eggyolk.chaldal.com/api-v4/DailyDeal/RetrieveDailyDeals` | `GET` | Flash sales & daily promotional deals |
 
-### Key parameters (from HAR)
-- `apiKey`: `e964fc2d51064efa97e94db7c64bf3d044279d4ed0ad4bdd9dce89fecc9156f0`  
-- `storeId`: `1` (Chaldal main)  
-- `warehouseId`: `8` (Banasree, covers Metro Dhaka)
+### Key API Payload Parameters
+- `apiKey`: `e964fc2d51064efa97e94db7c64bf3d044279d4ed0ad4bdd9dce89fecc9156f0`
+- `storeId`: `1` (Chaldal Main Store)
+- `warehouseId`: `8` (Banasree Warehouse - Metro Dhaka Region)
 - `metropolitanAreaId`: `1`
 
 ---
 
-## Data Files (generated in `data/`)
+## 📁 Repository Structure
 
 ```
-data/
-├── products.json        # { id: { name, price, mrp, imageUrl, inStock, ... } }
-├── categories.json      # [ { Id, Name, ParentCategoryId, DisplayOrder, ... } ]
-├── price_history.json   # { id: [ { d:"2026-08-01", p:355, m:355, s:true } ] }
-├── cat_products.json    # { catId: [ productId, ... ] }
-├── banners.json         # { AppHomeTop: [...], AppHomeMiddle1: [...] }
-├── init_meta.json       # storeId, warehouseId, lastUpdated, homeGroups, shipping
-└── daily_deals.json     # [ ... ]
-```
-
----
-
-## GitHub Pages Setup
-
-1. In GitHub Repository: **Settings → Pages**
-2. Under **Build and deployment → Source**, select **GitHub Actions** (or **Deploy from a branch: main / root**).
-3. The site will automatically deploy and be live at: [https://ranehal.github.io/CHALdal-analytics/](https://ranehal.github.io/CHALdal-analytics/)
-4. The **GitHub Action** (`.github/workflows/scrape.yml`) runs daily at midnight BST to scrape fresh prices, commit updated data, and trigger auto-deployment.
-
----
-
-## Architecture
-
-```
-scraper.py          ← Python 3.8+, stdlib only (no pip install needed)
-    ↓ writes
-data/*.json
-    ↑ reads
-app.js              ← Vanilla JS SPA, zero framework
-index.html          ← Semantic HTML5
-styles.css          ← Pure CSS, dark/light tokens
-.github/workflows/  ← Daily automation
+CHALDAL/
+├── scraper.py              # Zero-dependency Python CLI scraper (urllib, standard library)
+├── app.js                  # Vanilla JS SPA logic (Chart.js rendering, search, watchlist)
+├── index.html              # Responsive single-page application markup
+├── styles.css              # Dark/Light mode tokens & responsive UI styling
+├── runall.bat              # Windows batch launcher (Scraper / Dashboard / Both)
+├── data/                   # Generated JSON datasets
+│   ├── products.json       # Product metadata lookup map
+│   ├── categories.json     # Category tree structure
+│   ├── price_history.json  # Time-series price logs per product ID
+│   ├── daily_deals.json    # Active daily deals & discounts
+│   └── init_meta.json      # Store metadata & shipping configuration
+└── .github/workflows/
+    └── scrape.yml          # GitHub Actions daily automated cron pipeline
 ```
 
 ---
 
-## Requirements
+## 🛠️ Usage & Local Setup
 
-- **Scraper**: Python 3.8+ (stdlib only — no pip install required)
-- **Web App**: Any static file server (or GitHub Pages)
-- **Local dev**: `python -m http.server 8000` (included in `runall.bat`)
+### 1. Interactive Windows Launcher
+Execute [`runall.bat`](file:///C:/PROJECTS/CHALDAL/runall.bat) in command prompt:
+```cmd
+runall.bat
+```
+Interactive options:
+- `[1] scraper` — Execute python scraper to refresh product JSON files.
+- `[2] dashbrd` — Launch local HTTP server (`http://localhost:8000`).
+- `[3] both` — Scrape fresh prices, then launch the dashboard.
+
+### 2. Command Line Execution
+```bash
+# Run full store catalog scrape
+python scraper.py
+
+# Scrape specific category ID (for testing)
+python scraper.py --cat 108
+
+# Specify custom warehouse or area
+python scraper.py --store 1 --warehouse 8 --area 4
+
+# Start local dev web server
+python -m http.server 8000
+```
 
 ---
 
-## License
+## 📜 License
 
-MIT — Built with ❤️ from HAR analysis of the Chaldal Android app.
+Distributed under the MIT License. Data rights belong to Chaldal. Constructed for analytical and educational purposes.
