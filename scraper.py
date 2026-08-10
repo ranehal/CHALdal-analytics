@@ -11,7 +11,9 @@ Usage:
   python scraper.py --output data/     # Custom output dir
 """
 import json, os, sys, time, argparse, urllib.request, urllib.error, gzip, io
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from threading import Lock
 
 # Force UTF-8 stdout for Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -25,6 +27,8 @@ API_KEY     = "e964fc2d51064efa97e94db7c64bf3d044279d4ed0ad4bdd9dce89fecc9156f0"
 DEFAULT_STORE = 1
 DEFAULT_WH    = 8   # Banasree warehouse
 DEFAULT_AREA  = 4   # Banasree area  (MetropolitanAreaId=1)
+
+MAX_WORKERS = 5
 
 BASE_HEADERS = {
     "accept":                   "application/json",
@@ -178,36 +182,42 @@ def main():
 
     cats_to_scrape = ([c for c in all_cats if c["Id"] == args.cat] if args.cat else all_cats)
     total_new = 0
+    state_lock = Lock()
 
-    for cat in cats_to_scrape:
+    def scrape_one(cat):
+        nonlocal total_new
         cid, cname = cat["Id"], cat["Name"]
-        print(f"  [{cid}] {cname} ... ", end="", flush=True)
         try:
             hits  = scrape_category(cid, args.store, args.warehouse)
             count = 0
-            for p in hits:
-                norm = normalize(p, cid, today)
-                pid  = str(norm["id"])
-                # Update product index
-                if pid in products_index:
-                    products_index[pid].update({
-                        "price": norm["price"], "mrp": norm["mrp"],
-                        "inStock": norm["inStock"], "scraped": norm["scraped"]
-                    })
-                else:
-                    products_index[pid] = norm
-                # Append to price history (one entry per day)
-                hist = price_history.get(pid, [])
-                entry = {"d": today, "p": norm["price"], "m": norm["mrp"], "s": norm["inStock"]}
-                if not hist or hist[-1]["d"] != today:
-                    hist.append(entry)
-                    price_history[pid] = hist
-                    total_new += 1
-                count += 1
-            print(f"{count} products", flush=True)
+            with state_lock:
+                for p in hits:
+                    norm = normalize(p, cid, today)
+                    pid  = str(norm["id"])
+                    # Update product index
+                    if pid in products_index:
+                        products_index[pid].update({
+                            "price": norm["price"], "mrp": norm["mrp"],
+                            "inStock": norm["inStock"], "scraped": norm["scraped"]
+                        })
+                    else:
+                        products_index[pid] = norm
+                    # Append to price history (one entry per day)
+                    hist = price_history.get(pid, [])
+                    entry = {"d": today, "p": norm["price"], "m": norm["mrp"], "s": norm["inStock"]}
+                    if not hist or hist[-1]["d"] != today:
+                        hist.append(entry)
+                        price_history[pid] = hist
+                        total_new += 1
+                    count += 1
+            print(f"  [{cid}] {cname} ... {count} products", flush=True)
         except Exception as ex:
-            print(f"ERROR: {ex}", flush=True)
+            print(f"  [{cid}] {cname} ... ERROR: {ex}", flush=True)
         time.sleep(0.4)
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        for _ in executor.map(scrape_one, cats_to_scrape):
+            pass
 
     # ── 3. Daily deals ─────────────────────────────────────────────
     try:
