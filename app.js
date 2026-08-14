@@ -25,7 +25,8 @@ const State = {
   charts: {},          // chartjs instances
   activePeriod: '30d', // modal chart period
   activeProductId: null,
-  themeLight: localStorage.getItem('theme') === 'light',
+  viewIds: [],          // ordered product ids of current view (for arrow nav)
+  themeLight: localStorage.getItem('theme') !== 'dark',
 };
 
 // ── Data loading ────────────────────────────────────────────────
@@ -96,6 +97,15 @@ const App = {
     renderModal(pid);
     document.getElementById('product-modal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+  },
+
+  navigateProduct(dir) {
+    const ids = State.viewIds;
+    if (!ids.length) return;
+    const idx = ids.indexOf(String(State.activeProductId));
+    if (idx === -1) return;
+    const next = (idx + dir + ids.length) % ids.length;
+    this.openProduct(ids[next]);
   },
 
   closeModal() {
@@ -243,6 +253,16 @@ function renderHomeGroups() {
 // ── Price helpers ───────────────────────────────────────────────
 function getHistory(pid) { return State.priceHistory[String(pid)] || []; }
 
+function isAtAllTimeLow(p) {
+  const h = getHistory(p.id);
+  if (h.length < 2) return false;
+  const prices = h.map(x => x.p);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (min === max) return false; // price never changed
+  return h[h.length - 1].p <= min;
+}
+
 function getPriceChange(pid) {
   const h = getHistory(pid);
   if (h.length < 2) return null;
@@ -312,6 +332,7 @@ function renderRecentDrops() {
   document.getElementById('drops-grid').innerHTML = drops.length
     ? drops.map(p => productCardHtml(p)).join('')
     : '<p style="color:var(--text3);padding:1rem">No price drops yet — run the scraper daily to track changes.</p>';
+  State.viewIds = drops.map(p => String(p.id));
 }
 
 // ── Home: popular ───────────────────────────────────────────────
@@ -319,6 +340,7 @@ function renderPopular() {
   const all = Object.values(State.products);
   const shuffled = all.sort(() => Math.random() - 0.5).slice(0, 8);
   document.getElementById('popular-grid').innerHTML = shuffled.map(p => productCardHtml(p)).join('');
+  State.viewIds = shuffled.map(p => String(p.id));
 }
 
 // ── Hero price preview ──────────────────────────────────────────
@@ -327,18 +349,18 @@ function renderHeroPriceCard() {
   if (!p) return;
   const card = document.getElementById('hero-price-preview');
   card.innerHTML = `
-    <div style="font-size:.7rem;color:rgba(255,255,255,.5);margin-bottom:.5rem">Latest price check</div>
+    <div style="font-size:.7rem;color:var(--text3);margin-bottom:.5rem">Latest price check</div>
     <div style="display:flex;gap:.75rem;align-items:center">
-      <img src="${p.imageUrl}" style="width:56px;height:56px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.05)"
+      <img src="${p.imageUrl}" style="width:56px;height:56px;object-fit:contain;border-radius:8px;background:var(--bg3)"
            onerror="this.style.display='none'">
       <div>
-        <div style="font-size:.8rem;font-weight:600;opacity:.9">${p.name.slice(0,30)}…</div>
-        <div style="font-size:1.4rem;font-weight:900;color:#00d68f;font-family:'JetBrains Mono',monospace">
+        <div style="font-size:.8rem;font-weight:600;opacity:.9;color:var(--text)">${p.name.slice(0,30)}…</div>
+        <div style="font-size:1.4rem;font-weight:900;color:var(--accent);font-family:'JetBrains Mono',monospace">
           ${formatPrice(p.price)}
         </div>
       </div>
     </div>
-    <div style="margin-top:.75rem;font-size:.7rem;opacity:.5">Updated ${p.scraped || 'today'}</div>`;
+    <div style="margin-top:.75rem;font-size:.7rem;opacity:.5;color:var(--text2)">Updated ${p.scraped || 'today'}</div>`;
 }
 
 // ── Freshness ───────────────────────────────────────────────────
@@ -370,6 +392,11 @@ function getProductsForView() {
     prods = prods.filter(p => p.name?.toLowerCase().includes(q) || p.nameBn?.includes(q));
   }
 
+  // Apply filters
+  if (State.activeFilters.includes('atl')) {
+    prods = prods.filter(isAtAllTimeLow);
+  }
+
   // Sort
   switch (State.sortBy) {
     case 'price-asc':  prods.sort((a,b) => a.price - b.price); break;
@@ -386,6 +413,27 @@ function getProductsForView() {
   return prods;
 }
 
+function renderFilterChips() {
+  const container = document.getElementById('filter-chips');
+  if (!container) return;
+  const chips = [
+    { id: 'atl', label: '💎 All-time Low' },
+  ];
+  container.innerHTML = chips.map(c => `
+    <button class="chip ${State.activeFilters.includes(c.id) ? 'active' : ''}"
+      data-filter="${c.id}" onclick="App.toggleFilter('${c.id}')">${c.label}</button>
+  `).join('');
+}
+
+App.toggleFilter = (id) => {
+  const i = State.activeFilters.indexOf(id);
+  if (i >= 0) State.activeFilters.splice(i, 1);
+  else State.activeFilters.push(id);
+  State.currentPage = 1;
+  renderFilterChips();
+  renderProductsView();
+};
+
 function renderProductsView() {
   const catMap2 = catMap();
   const cat = State.currentCatId ? catMap2[State.currentCatId] : null;
@@ -398,7 +446,11 @@ function renderProductsView() {
   // Subcategory sidebar
   renderSubcatSidebar(cat, catMap2);
 
+  // Filter chips
+  renderFilterChips();
+
   const prods = getProductsForView();
+  State.viewIds = prods.map(p => String(p.id));
   const total = prods.length;
   const pageProds = prods.slice((State.currentPage - 1) * State.pageSize, State.currentPage * State.pageSize);
 
@@ -468,6 +520,7 @@ function renderDealsView() {
   document.getElementById('deals-grid').innerHTML = discounted.length
     ? discounted.map(p => productCardHtml(p)).join('')
     : '<p style="color:var(--text3);padding:2rem">No discounted products found.</p>';
+  State.viewIds = discounted.map(p => String(p.id));
 }
 
 // ── Analytics ───────────────────────────────────────────────────
@@ -502,13 +555,10 @@ function renderPriceDist(catId) {
     type: 'bar',
     data: {
       labels,
-      datasets: [{ label: 'Products', data: counts, backgroundColor: 'rgba(0,214,143,0.6)',
-        borderColor: 'rgba(0,214,143,1)', borderWidth: 1, borderRadius: 6 }]
+      datasets: [{ label: 'Products', data: counts, backgroundColor: 'rgba(240,165,0,0.55)',
+        borderColor: '#f0a500', borderWidth: 1, borderRadius: 6 }]
     },
-    options: chartDefaults({ plugins: { legend: { display: false } }, scales: {
-      x: { ticks: { color: '#8896b3' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-      y: { ticks: { color: '#8896b3' }, grid: { color: 'rgba(255,255,255,0.05)' } }
-    }}),
+    options: chartDefaults({ plugins: { legend: { display: false } } }),
   });
 }
 
@@ -532,8 +582,8 @@ function renderTrendChart() {
     data: {
       labels: days,
       datasets: [{ label: 'Avg Price (৳)', data: avgs,
-        borderColor: '#4d88ff', backgroundColor: 'rgba(77,136,255,0.1)',
-        fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#4d88ff' }]
+        borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.10)',
+        fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#f0a500' }]
     },
     options: chartDefaults(),
   });
@@ -587,16 +637,18 @@ function renderTopDrops() {
 
 // ── Chart defaults ──────────────────────────────────────────────
 function chartDefaults(extra = {}) {
+  const dark = !State.themeLight;
   return {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { labels: { color: '#8896b3', font: { family: 'Inter', size: 11 } } },
-      tooltip: { backgroundColor: '#1e2535', titleColor: '#e8ecf4', bodyColor: '#8896b3' }
+      legend: { labels: { color: dark ? '#8896b3' : '#6b6557', font: { family: 'Inter', size: 11 } } },
+      tooltip: { backgroundColor: dark ? '#1e2535' : '#ffffff', titleColor: dark ? '#e8ecf4' : '#1c1a14',
+                 bodyColor: dark ? '#8896b3' : '#6b6557', borderColor: dark ? '#2a3247' : '#e5ddc8', borderWidth: 1 }
     },
     scales: {
-      x: { ticks: { color: '#8896b3', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-      y: { ticks: { color: '#8896b3', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      x: { ticks: { color: dark ? '#8896b3' : '#6b6557', font: { size: 11 } }, grid: { color: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)' } },
+      y: { ticks: { color: dark ? '#8896b3' : '#6b6557', font: { size: 11 } }, grid: { color: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)' } }
     },
     ...extra
   };
@@ -640,6 +692,7 @@ function renderModal(pid) {
     <div class="modal-chart-section">
       <div class="modal-chart-header">
         <h4>📈 Price History</h4>
+        <div class="chart-nav-hint">← → arrow keys to browse</div>
         <div class="chart-period-btns">
           <button class="period-btn ${State.activePeriod==='7d'?'active':''}"  onclick="App.setPeriod('7d')">7D</button>
           <button class="period-btn ${State.activePeriod==='30d'?'active':''}" onclick="App.setPeriod('30d')">30D</button>
@@ -687,17 +740,17 @@ function renderModalChart(pid) {
     data: {
       labels,
       datasets: [
-        { label: 'Price', data: prices, borderColor: '#00d68f', backgroundColor: 'rgba(0,214,143,0.1)',
-          fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#00d68f', borderWidth: 2 },
+        { label: 'Price', data: prices, borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.10)',
+          fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#f0a500', borderWidth: 2 },
         ...(mrps.some(m => m > prices[prices.indexOf(m)])
-          ? [{ label: 'MRP', data: mrps, borderColor: '#ff4d6a', borderDash: [5,5],
+          ? [{ label: 'MRP', data: mrps, borderColor: '#e5484d', borderDash: [5,5],
                borderWidth: 1.5, pointRadius: 0, fill: false }]
           : [])
       ]
     },
     options: { ...chartDefaults(), maintainAspectRatio: false, scales: {
-      x: { ticks: { color: '#8896b3', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-      y: { ticks: { color: '#8896b3', callback: v => '৳' + v, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      x: { ticks: { color: State.themeLight ? '#6b6557' : '#8896b3', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: State.themeLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.04)' } },
+      y: { ticks: { color: State.themeLight ? '#6b6557' : '#8896b3', callback: v => '৳' + v, font: { size: 10 } }, grid: { color: State.themeLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.04)' } }
     }},
   });
 
@@ -728,6 +781,7 @@ function renderWatchlist() {
     empty.classList.add('hidden');
     grid.innerHTML = prods.map(p => productCardHtml(p)).join('');
   }
+  State.viewIds = prods.map(p => String(p.id));
 }
 
 // ── Search ──────────────────────────────────────────────────────
@@ -761,6 +815,10 @@ function bindSearch() {
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); input.focus(); }
     if (e.key === 'Escape') { App.closeModal(); dd.classList.add('hidden'); input.value = ''; }
+    if (!document.getElementById('product-modal').classList.contains('hidden')) {
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); App.navigateProduct(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); App.navigateProduct(1); }
+    }
   });
 }
 
