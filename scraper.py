@@ -152,15 +152,25 @@ def main():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # ── 1. Fetch init data ──────────────────────────────────────────
-    print(f"[{today}] Fetching init data (store={args.store}, wh={args.warehouse})...", flush=True)
-    init = fetch_init(args.store, args.warehouse)
+    all_cats = []
+    banners  = {}
+    hgc      = {}
+    gc       = {}
+    try:
+        init = fetch_init(args.store, args.warehouse)
+        if init:
+            all_cats = init.get("Categories", {}).get(str(args.store), [])
+            banners  = init.get("HomeBannersByTags", {}).get(str(args.store), {})
+            hgc      = init.get("HomeGroupCategoryIds", {}).get(str(args.store), {})
+            gc       = init.get("GlobalConstants", {}).get(str(args.store), {})
+    except Exception as ex:
+        print(f"  [!] Init API warning ({ex}). Using cached category metadata...", flush=True)
+        cached_cats = load(f"{out}/categories.json") or load("categories.json")
+        if cached_cats:
+            all_cats = cached_cats
 
-    all_cats = init.get("Categories", {}).get(str(args.store), [])
-    banners  = init.get("HomeBannersByTags", {}).get(str(args.store), {})
-    hgc      = init.get("HomeGroupCategoryIds", {}).get(str(args.store), {})
-    gc       = init.get("GlobalConstants", {}).get(str(args.store), {})
-
-    save(f"{out}/categories.json", all_cats)
+    if all_cats:
+        save(f"{out}/categories.json", all_cats)
     save(f"{out}/banners.json",    banners)
     save(f"{out}/init_meta.json",  {
         "storeId":     args.store,
