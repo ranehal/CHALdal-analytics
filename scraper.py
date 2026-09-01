@@ -16,7 +16,10 @@ from datetime import datetime, timezone
 from threading import Lock
 
 # Force UTF-8 stdout for Windows
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception: pass
 
 # ── API endpoints (from HAR analysis) ──────────────────────────────────────────
 CATALOG_URL = "https://catalog.chaldal.com/searchPersonalized"
@@ -68,11 +71,20 @@ def req(url, body=None, store_id=DEFAULT_STORE):
             time.sleep(2 ** attempt)
 
 
-def fetch_init(store_id, warehouse_id):
-    now = datetime.now()
-    ts = f"{now.hour:02d}%3A{now.minute:02d}%3A{now.second:02d}%20GMT%2B0600"
-    url = f"{INIT_URL}?serializationType=Javascript&timeStamp={ts}&warehouseId={warehouse_id}"
-    return req(url, store_id=store_id)
+def fetch_init(store_id, warehouse_id=None):
+    try:
+        return req("https://catalog.chaldal.com/fetchInitDataForCombinedStore", store_id=store_id)
+    except Exception as _fe:
+        print(f"  [!] fetch_init failed ({_fe}). Using cached/empty categories fallback...", flush=True)
+        try:
+            import glob as _gb
+            for _cp in _gb.glob("**/categories.json", recursive=True) + _gb.glob("**/products.json", recursive=True):
+                try:
+                    with open(_cp, "r", encoding="utf-8") as _cfh:
+                        return {"Categories": {str(store_id): json.load(_cfh)}}
+                except Exception: pass
+        except Exception: pass
+        return {"Categories": {str(store_id): []}}
 
 
 def scrape_category(cat_id, store_id, warehouse_id, metro_area_id=1, page_size=50):
