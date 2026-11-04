@@ -32,6 +32,7 @@ DEFAULT_WH    = 8   # Banasree warehouse
 DEFAULT_AREA  = 4   # Banasree area  (MetropolitanAreaId=1)
 
 MAX_WORKERS = 5
+DEADLINE_SECONDS = 45 * 60
 
 BASE_HEADERS = {
     "accept":                   "application/json",
@@ -205,9 +206,12 @@ def main():
     cats_to_scrape = ([c for c in all_cats if c["Id"] == args.cat] if args.cat else all_cats)
     total_new = 0
     state_lock = Lock()
+    deadline = time.time() + DEADLINE_SECONDS
 
     def scrape_one(cat):
         nonlocal total_new
+        if time.time() > deadline:  # keep what we have instead of dying at the orchestrator's 1h limit
+            return
         cid, cname = cat["Id"], cat["Name"]
         try:
             hits  = scrape_category(cid, args.store, args.warehouse)
